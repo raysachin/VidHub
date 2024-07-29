@@ -10,7 +10,22 @@ dotenv.config({
 
 // Method 2 f writing code in DB folder and export from there and import here
 
-connectDB();
+connectDB()
+.then(() =>{
+    app.listen(process.env.PORT || 8000, () =>{
+        console.log(`Server is running at port : ${process.env.PORT}`);
+    })
+})
+.catch((err) =>{
+    console.log("MONGO DB connection failed !!!", err);
+})
+
+// error listemner for the app
+// Error listener for the app
+// app.on("error", (error) => {
+//     console.log("App Error: ", error);
+//     throw error;
+// });
 
 
 
