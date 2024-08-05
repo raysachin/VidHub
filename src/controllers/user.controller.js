@@ -15,6 +15,28 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 // import Api Response
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+
+const generateAccessAndRefreshTokens = async(userId) => {
+    try{
+        const user = await User.findById(userId);
+        const accessToken = user.generateAccessToken()
+        const refreshToken = user.generateRefreshToken()
+
+        // Access token to user ko de dete hai lekin refresh token hmare databse me v save krke rakhna hota hai
+        // save the refresh token in databse
+        user.refreshToken = refreshToken
+        await user.save({validateBeforeSave: false})
+
+        return {accessToken, refreshToken};
+
+
+
+    } catch(error){
+        throw new ApiError(500, "Something went wrong while generating refresh and accsess token")
+    }
+}
+
+
 // create method to register users
 const registerUser = asyncHandler(async (req, res) => {
     
@@ -112,5 +134,105 @@ const registerUser = asyncHandler(async (req, res) => {
     
 })
 
+
+// Create method login user
+const loginUser = asyncHandler(async (req, res) =>{
+    // Step 1: Get the user credentials from the request body
+    const {email, username, password} = req.body;
+
+    //Step 2: agar username v nii hai or email v nii hai
+    if(!email || !username){
+        throw new ApiError(400, "Email or Username is required");
+    }
+
+    //Step : 3 Find username or email in database
+    const user = await User.findOne({
+        $or: [{username}, {email}]  // it will find value on the basis of username or email
+    })
+
+    // Agar user mila hi nii kisi v bais p then
+    if(!user){
+        throw new ApiError(404, "User Not Found");
+    }
+
+    // Step 4: Check the password
+
+    // here we use user Not User because client are user not The User, User is mongodb data base user
+
+    const isPasswordValid = await user.isPasswordCorrect(password);
+
+    // Password is incorrect
+    if(!isPasswordValid){
+        throw new ApiError(401, "Invalid Password");
+    }
+
+    // Step 5: If passwrod correct then make access and refresh token and send it to the user
+    
+    // Now call the method
+    const {accessToken, refreshToken} = await generateAccessAndRefreshTokens(user._id)
+
+
+
+    // optional
+    const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
+    // Step 6: Send tokens in cookies
+    const options = {
+        httpOnly: true, // The cookie only accessible by the web server, we cannot modified from frontend
+        secure: true
+
+    }
+
+    // return the response
+    return res
+    .status(200)
+    .cookie("accessToke", accessToken, options)
+    .cookie("refreshToken", refreshToken, options)
+    .json(
+        new ApiResponse(
+            200,
+            {
+                user: loggedInUser, accessToken,
+                refreshToken
+            },
+            "User logged in successfully"
+        )
+    )
+
+})
+
+// Crete method for logged out
+const logoutUser = asyncHandler(async(req, res) =>{
+     // find the user, kaise aaya middleware ki help se
+    await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            // Jo jo update krna hai wo yha likhna hai
+            $set:{
+                refreshToken: undefined
+            }
+        },
+        {
+            new: true
+        }
+    )
+
+    const options = {
+        httpOnly: true, // The cookie only accessible by the web server, we cannot modified from frontend
+        secure: true
+
+    }
+
+    // clear the cookies
+    return res
+    .status(200)
+    .clearCookie("accessToken", options)
+    .clearCookie("refreshToken", options)
+    .json(new ApiResponse(200, {}, "USer Logged Out Successfully"))
+})
+
 // export
-export {registerUser}
+export {
+    registerUser,
+    loginUser,
+    logoutUser
+}
