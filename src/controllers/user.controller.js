@@ -16,6 +16,7 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 import { ApiResponse } from "../utils/ApiResponse.js";
 
 
+
 const generateAccessAndRefreshTokens = async(userId) => {
     try{
         const user = await User.findById(userId);
@@ -137,11 +138,12 @@ const registerUser = asyncHandler(async (req, res) => {
 
 // Create method login user
 const loginUser = asyncHandler(async (req, res) =>{
+    console.log('Login successfully');
     // Step 1: Get the user credentials from the request body
     const {email, username, password} = req.body;
 
     //Step 2: agar username v nii hai or email v nii hai
-    if(!email || !username){
+    if(!email && !username){
         throw new ApiError(400, "Email or Username is required");
     }
 
@@ -185,7 +187,7 @@ const loginUser = asyncHandler(async (req, res) =>{
     // return the response
     return res
     .status(200)
-    .cookie("accessToke", accessToken, options)
+    .cookie("accessToken", accessToken, options)
     .cookie("refreshToken", refreshToken, options)
     .json(
         new ApiResponse(
@@ -202,32 +204,40 @@ const loginUser = asyncHandler(async (req, res) =>{
 
 // Crete method for logged out
 const logoutUser = asyncHandler(async(req, res) =>{
-     // find the user, kaise aaya middleware ki help se
-    await User.findByIdAndUpdate(
-        req.user._id,
-        {
-            // Jo jo update krna hai wo yha likhna hai
-            $set:{
-                refreshToken: undefined
-            }
-        },
-        {
-            new: true
-        }
-    )
-
-    const options = {
-        httpOnly: true, // The cookie only accessible by the web server, we cannot modified from frontend
-        secure: true
-
-    }
-
-    // clear the cookies
-    return res
-    .status(200)
-    .clearCookie("accessToken", options)
-    .clearCookie("refreshToken", options)
-    .json(new ApiResponse(200, {}, "USer Logged Out Successfully"))
+    console.log('Logout request received');
+     try {
+        // find the user, kaise aaya middleware ki help se
+       await User.findByIdAndUpdate(
+           req.user._id,
+           {
+               // Jo jo update krna hai wo yha likhna hai
+               $set:{
+                   refreshToken: undefined
+               }
+           },
+           {
+               new: true
+           }
+       )
+   
+       const options = {
+           httpOnly: true, // The cookie only accessible by the web server, we cannot modified from frontend
+           secure: true
+   
+       }
+   
+       // clear the cookies
+       return res
+       .status(200)
+       .clearCookie("accessToken", options)
+       .clearCookie("refreshToken", options)
+       .json(new ApiResponse(200, {}, "USer Logged Out Successfully"))
+     } catch (error) {
+        return res
+            .status(500)
+            .json(new ApiResponse(500, {}, "Error logging out user"));
+        
+     }
 })
 
 // export
