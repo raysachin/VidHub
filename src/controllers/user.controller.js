@@ -15,6 +15,8 @@ import {uploadOnCloudinary} from "../utils/cloudinary.js"
 // import Api Response
 import { ApiResponse } from "../utils/ApiResponse.js";
 
+import jwt from "jsonwebtoken"
+
 
 
 const generateAccessAndRefreshTokens = async(userId) => {
@@ -40,6 +42,8 @@ const generateAccessAndRefreshTokens = async(userId) => {
 
 // create method to register users
 const registerUser = asyncHandler(async (req, res) => {
+    console.log("Registered");
+    
     
     // Step 1: Get user details from frotend
     const {fullname, email, username, password} = req.body  // body se data aa rha hai, url se v aa skta hai 
@@ -203,7 +207,7 @@ const loginUser = asyncHandler(async (req, res) =>{
 })
 
 // Crete method for logged out
-const logoutUser = asyncHandler(async(req, res) =>{
+const logoutUser = asyncHandler(async (req, res) =>{
     console.log('Logout request received');
      try {
         // find the user, kaise aaya middleware ki help se
@@ -232,6 +236,8 @@ const logoutUser = asyncHandler(async(req, res) =>{
        .clearCookie("accessToken", options)
        .clearCookie("refreshToken", options)
        .json(new ApiResponse(200, {}, "USer Logged Out Successfully"))
+
+       console.log('Logout Successfully');
      } catch (error) {
         return res
             .status(500)
@@ -240,9 +246,70 @@ const logoutUser = asyncHandler(async(req, res) =>{
      }
 })
 
+
+// End point for refresh access token
+// Suppose after expiriing the access toekn as it is short lived token, user get the 401 request, In this case use don not need to login by email and password, they hit an end point and get the login
+
+// How they hit that end point
+// As in frontend a new token is also stored that is Refresh token and it is also stored in database, as user hit the end point these refresh toekn goes to backend where it will match with the stored refresh token, as if it matched the new session started and generate a new acsses token as well as refesh token 
+
+const refreshAccessToken = asyncHandler(async (req, res) =>{
+    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken 
+
+    if(!incomingRefreshToken){
+        throw new ApiError(401, "Unauthorized Request")
+    }
+
+    try {
+        // Now we have to verify incoming refresh token
+        const decodedToken = jwt.verify(
+            incomingRefreshToken,
+            process.env.REFRESH_TOKEN_SECRET,
+        )
+    
+        const user = await User.findById(decodedToken?._id)
+    
+        if(!user){
+            throw new ApiError(401, "Invalid Refresh Token")
+        }
+    
+        // now match the both token
+        if(incomingRefreshToken !== user?.refreshToken){
+            throw new ApiError(401, "Refresh Token is expired or used")
+        }
+    
+    
+        // if matched
+        // generate new access token and refresh token
+        const options = {
+            httpOnly: true,
+            secure: true
+        }
+    
+        const {accessToken, newRefreshToken} = await generateAccessAndRefreshTokens(user._id)
+    
+        return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", newRefreshToken, options)
+        .json(
+            new ApiResponse(
+                200,
+                {accessToken, refreshToken: newRefreshToken},
+                "Access token refreshed"
+            )
+        )
+    } catch (error) {
+        throw new ApiError(401, error?.message || "Invalid Refresh Token")
+        
+    }
+
+})
+
 // export
 export {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    refreshAccessToken
 }
