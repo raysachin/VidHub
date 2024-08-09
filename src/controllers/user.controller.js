@@ -444,6 +444,94 @@ const updateUserCoverImage = asyncHandler(async (req, res) =>{
 
 })
 
+// For user channel profile like subscriber, subscribed with number and button
+const getUserChannelProfile = asyncHandler(async (req, res) =>{
+    // channel ki profile chaie to uske url p jate hai
+    const {username} = req.params;
+
+    if(!username?.trime()){
+        throw new ApiError(400, "username is missing")
+    }
+
+    const channel = await User.aggregate([
+        {
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {
+            // find number of subscriber we use lookup
+            $lookup: {
+                from: "subscriptions", // lower case and become plural, it is in model in the name of Subscription
+                localField: "_id",
+                foreignField: "channel",
+                as: "subscribers"
+            }
+
+        },
+        {
+            // Find number of channel we have subscribed till now
+            $lookup: {
+                from: "subscriptions", // lower case and become plural, it is in model in the name of Subscription
+                localField: "_id",
+                foreignField: "subscriber",
+                as: "subscribedTo"
+            }
+        },
+        {
+            // add additional fields
+            $addFields: {
+                subscriberCount: {
+                    $size: "$subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    // It is for which buttion is to show, subscribe or subscribed, for this we send a true or false value to the frontend and on the basis of this frontend wala sambhal lega
+                    $cond: {
+                        if:{
+                            $in: [
+                                req.user?._id, "$subscribers.subscriber"
+                            ]
+                        },
+                        then: true,
+                        else: false
+                    }
+                }
+            },
+            $project: {
+                // It gives selected things
+                fullname: 1,
+                username: 1,
+                subscriberCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1
+
+                // If you want to show that kab se account created hai then you can send createdAt too
+
+            }
+        }
+    ])
+
+    // console.log(channel);
+
+    // chack channel
+    if(!channel?.length){
+        throw new ApiError(404, "Channel does not exists")
+    }
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, channel[0], "USer channel fetched successfully")
+    )
+    
+})
+
 
 
 // export
@@ -455,5 +543,6 @@ export {
     getCurrentUser,
     getCurrentUser,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserChannelProfile
 }
