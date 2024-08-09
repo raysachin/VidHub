@@ -306,10 +306,154 @@ const refreshAccessToken = asyncHandler(async (req, res) =>{
 
 })
 
+
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+    // We don not nedd to verify user is logged in or not here.
+    // Because we verified while making routes by jwt that user is login or not
+
+    const {oldPassword, newPassword} = req.body
+
+    // Find user
+    const user = User.findById(req.user?._id)
+
+    // check password is correct or not by calling methods that we created in user.model.js
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
+
+    // If passwrod is not correct
+    if(!isPasswordCorrect){
+        throw new ApiError(400, "Old Password is incorrect")
+    }
+
+    user.password = newPassword  // here we set not saved
+
+    // save the password
+    await user.save({validateBeforeSave: false})
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password Changed Successfully"))
+})
+
+
+// Get current user
+const getCurrentUser = asyncHandler(async (req, res) =>{
+    return res
+    .status(200)
+    .json(new ApiResponse(200, req.user, "Current user fetched successfully"))
+})
+
+// Now it depend on you what what you allow user to chnage or update
+const updateAccountDetails = asyncHandler(async (req, res) => {
+    // information
+    const {fullname, email} = req.body
+
+    if(!fullname || !email){
+        throw new ApiError(400, "Please fill all fields")
+    }
+
+    // find user
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set: {
+                fullname,
+                email: email  // both way
+            }
+        },
+        {new: true} // new true hone se, update hone ke baad ka information return hoti hai 
+    ).select("-password")  // passwrord field nii chaiye
+
+    return res
+    .status(200)
+    .json(new ApiResponse(200, user, "Account details updated successfully"))
+})
+
+// Now update files
+// we have to use middleware that is multer-> that is used to accept file
+// 2nd middleware is that, only those people are able to update who is logged in -> handle while routinng
+
+const updateUserAvatar = asyncHandler(async (req, res) =>{
+    const avatarLocalPath = req.file?.path //Here file not files, ye mujhe multer middleware ke dwara mila
+
+    if(!avatarLocalPath){
+        throw new ApiError(400, "Please upload a file, it is missing")
+    }
+
+    // TODO: Delete old image - Assignment by making utility function
+
+    // upload on cloudinary
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+    
+    if(!avatar.url){
+        throw new ApiError(400, "Error while uploading on avatar")
+    }
+
+    // update
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                avatar: avatar.url
+            }
+        },
+        {new: true} // new true hone se, update hone ke baad ka information return
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, user, "Avatar Image Updated successfully ")
+    )
+
+
+})
+
+
+// update user cover image
+const updateUserCoverImage = asyncHandler(async (req, res) =>{
+    const coverImageLocalPath = req.file?.path //Here file not files, ye mujhe multer middleware ke dwara mila
+
+    if(!coverImageLocalPath){
+        throw new ApiError(400, "Please upload a file, cover file is missing")
+    }
+
+    // upload on cloudinary
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+    
+    if(!coverImage.url){
+        throw new ApiError(400, "Error while uploading on Cover image")
+    }
+
+    // update
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                coverImage: coverImage.url
+            }
+        },
+        {new: true} // new true hone se, update hone ke baad ka information return
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new ApiResponse(200, user, "Cover Image Updated successfully ")
+    )
+
+
+})
+
+
+
 // export
 export {
     registerUser,
     loginUser,
     logoutUser,
-    refreshAccessToken
+    refreshAccessToken,
+    getCurrentUser,
+    getCurrentUser,
+    updateUserAvatar,
+    updateUserCoverImage
 }
